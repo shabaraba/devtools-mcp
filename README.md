@@ -25,6 +25,11 @@ A Model Context Protocol (MCP) server providing development tools and utilities 
 - `disk_usage` - Disk space information
 - `execute_command` - Run system commands
 
+### Process Management
+- `kill_process` - Kill process by name or PID with signal control
+- `detailed_process_list` - Get detailed process info with CPU/memory usage and sorting
+- `find_process_url` - Find URLs/ports for a process by name (development servers)
+
 ### Database Operations
 - `db_connect` - Connect to databases (SQLite, PostgreSQL, MySQL)
 - `db_query` - Execute SQL queries
@@ -104,6 +109,39 @@ The server runs on stdio and can be integrated with MCP-compatible clients.
 ```
 
 This solves the common issue where `npm run dev` blocks Claude Code execution. The server starts in the background and returns immediately, allowing Claude Code to continue with other tasks while monitoring the development server status.
+
+### Process Management Examples
+
+```javascript
+// Kill process by name
+{
+  "tool": "kill_process",
+  "arguments": {
+    "name": "node",
+    "signal": "TERM",
+    "force": false
+  }
+}
+
+// Get detailed process list sorted by CPU usage
+{
+  "tool": "detailed_process_list",
+  "arguments": {
+    "filter": "node",
+    "sortBy": "cpu",
+    "limit": 10
+  }
+}
+
+// Find development server URL by process name
+{
+  "tool": "find_process_url",
+  "arguments": {
+    "processName": "node"
+  }
+}
+// Returns: "Development server likely running at: http://localhost:3000"
+```
 
 ## License
 
