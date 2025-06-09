@@ -15,7 +15,8 @@ interface DevServer {
 
 export class DevServerTool implements BaseTool {
   private servers: Map<string, DevServer> = new Map();
-  private maxLogLines = 1000;
+  private maxLogLines = 100;
+  private maxLogLength = 1000;
 
   constructor() {
     // Cleanup on process exit
@@ -226,35 +227,69 @@ export class DevServerTool implements BaseTool {
 
     this.servers.set(name, server);
 
-    // Handle process events
+    // Handle process events with async logging and data limits
     childProcess.stdout?.on('data', (data) => {
-      this.addLog(name, `[STDOUT] ${data.toString()}`);
+      setImmediate(() => {
+        const logData = data.toString();
+        const truncatedData = logData.length > this.maxLogLength 
+          ? logData.substring(0, this.maxLogLength) + '...[truncated]'
+          : logData;
+        this.addLog(name, `[STDOUT] ${truncatedData}`);
+      });
     });
 
     childProcess.stderr?.on('data', (data) => {
-      this.addLog(name, `[STDERR] ${data.toString()}`);
+      setImmediate(() => {
+        const logData = data.toString();
+        const truncatedData = logData.length > this.maxLogLength 
+          ? logData.substring(0, this.maxLogLength) + '...[truncated]'
+          : logData;
+        this.addLog(name, `[STDERR] ${truncatedData}`);
+      });
     });
 
     childProcess.on('error', (error) => {
-      this.addLog(name, `[ERROR] ${error.message}`);
-      server.status = 'error';
+      setImmediate(() => {
+        this.addLog(name, `[ERROR] ${error.message}`);
+        server.status = 'error';
+      });
     });
 
     childProcess.on('exit', (code, signal) => {
-      this.addLog(name, `[EXIT] Process exited with code ${code}, signal ${signal}`);
-      server.status = 'stopped';
+      setImmediate(() => {
+        this.addLog(name, `[EXIT] Process exited with code ${code}, signal ${signal}`);
+        server.status = 'stopped';
+      });
     });
 
-    // Wait a moment to see if process starts successfully
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Quick check if process started - with timeout
+    const startupPromise = new Promise<boolean>((resolve) => {
+      const timeout = setTimeout(() => resolve(true), 2000); // 2 second timeout
+      
+      // If process exits immediately, it failed
+      childProcess.once('exit', () => {
+        clearTimeout(timeout);
+        resolve(false);
+      });
+      
+      // If process survives initial period, consider it started
+      setTimeout(() => {
+        if (!childProcess.killed && childProcess.exitCode === null) {
+          clearTimeout(timeout);
+          resolve(true);
+        }
+      }, 500);
+    });
 
-    if (childProcess.exitCode !== null) {
+    const started = await startupPromise;
+
+    if (!started || childProcess.exitCode !== null) {
       server.status = 'error';
       return {
         content: [
           {
             type: 'text',
-            text: `Failed to start server "${name}". Process exited with code ${childProcess.exitCode}. Check logs for details.`,
+            text: `Failed to start server "${name}". Process may have exited immediately. Check logs for details.`,
           },
         ],
       };
