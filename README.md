@@ -1,41 +1,13 @@
 # DevTools MCP Server
 
-A Model Context Protocol (MCP) server providing development tools and utilities for enhanced development workflows.
+A specialized Model Context Protocol (MCP) server focused on process management and development server control. Solves the common issue where `npm run dev` blocks Claude Code execution.
 
 ## Features
-
-### Git Operations
-- `git_status` - Get repository status
-- `git_diff` - Show file differences
-- `git_log` - View commit history
-- `git_add` - Stage files
-- `git_commit` - Create commits
-
-### File Operations
-- `list_directory` - List files and directories
-- `read_file` - Read file contents
-- `write_file` - Write content to files
-- `file_info` - Get file/directory information
-- `search_files` - Search for files with patterns
-
-### System Information
-- `system_info` - Get system details (OS, CPU, memory)
-- `process_list` - List running processes
-- `network_info` - Network interface information
-- `disk_usage` - Disk space information
-- `execute_command` - Run system commands
 
 ### Process Management
 - `kill_process` - Kill process by name or PID with signal control
 - `detailed_process_list` - Get detailed process info with CPU/memory usage and sorting
 - `find_process_url` - Find URLs/ports for a process by name (development servers)
-
-### Database Operations
-- `db_connect` - Connect to databases (SQLite, PostgreSQL, MySQL)
-- `db_query` - Execute SQL queries
-- `db_schema` - Get database schema
-- `db_disconnect` - Close connections
-- `db_list_connections` - List active connections
 
 ### Development Server Management
 - `start_dev_server` - Start development server in background (solves npm run dev blocking)

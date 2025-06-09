@@ -9,10 +9,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
-import { GitTool } from './tools/git.js';
-import { FileTool } from './tools/file.js';
-import { SystemTool } from './tools/system.js';
-import { DatabaseTool } from './tools/database.js';
+import { ProcessTool } from './tools/process.js';
 import { DevServerTool } from './tools/dev-server.js';
 
 const server = new Server(
@@ -28,10 +25,7 @@ const server = new Server(
 );
 
 const tools = [
-  new GitTool(),
-  new FileTool(),
-  new SystemTool(),
-  new DatabaseTool(),
+  new ProcessTool(),
   new DevServerTool(),
 ];
 
