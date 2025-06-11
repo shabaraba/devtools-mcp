@@ -108,6 +108,61 @@
     };
   });
 
+  // Override fetch to capture HTTP errors
+  const originalFetch = window.fetch;
+  window.fetch = function(...args) {
+    const request = originalFetch.apply(this, args);
+    
+    return request.then(response => {
+      // Log HTTP errors
+      if (!response.ok) {
+        const url = args[0];
+        const method = args[1]?.method || 'GET';
+        sendLog('error', [`${method} ${url} ${response.status} (${response.statusText})`]);
+      }
+      return response;
+    }).catch(error => {
+      // Log network errors
+      const url = args[0];
+      const method = args[1]?.method || 'GET';
+      sendLog('error', [`Network Error: ${method} ${url}`, error.message]);
+      throw error; // Re-throw to maintain normal error handling
+    });
+  };
+
+  // Override XMLHttpRequest to capture HTTP errors
+  const OriginalXHR = window.XMLHttpRequest;
+  window.XMLHttpRequest = function() {
+    const xhr = new OriginalXHR();
+    const originalOpen = xhr.open;
+    const originalSend = xhr.send;
+    
+    let method = '';
+    let url = '';
+    
+    xhr.open = function(m, u, ...args) {
+      method = m;
+      url = u;
+      return originalOpen.apply(this, [m, u, ...args]);
+    };
+    
+    xhr.send = function(...args) {
+      xhr.addEventListener('loadend', function() {
+        if (xhr.status >= 400) {
+          sendLog('error', [`${method} ${url} ${xhr.status} (${xhr.statusText})`]);
+        }
+      });
+      
+      xhr.addEventListener('error', function() {
+        sendLog('error', [`Network Error: ${method} ${url}`]);
+      });
+      
+      return originalSend.apply(this, args);
+    };
+    
+    return xhr;
+  };
+
   // Notify that logger is active
   originalConsole.log('%c[DevTools MCP] Console logger activated', 'color: #4CAF50; font-weight: bold');
 })();
