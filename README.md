@@ -1,6 +1,6 @@
 # DevTools MCP Server
 
-A specialized Model Context Protocol (MCP) server focused on process management and development server control. Solves the common issue where `npm run dev` blocks Claude Code execution.
+A specialized Model Context Protocol (MCP) server focused on process management, development server control, and browser console log collection. Solves common development challenges including `npm run dev` blocking and browser debugging visibility.
 
 ## Features
 
@@ -16,6 +16,11 @@ A specialized Model Context Protocol (MCP) server focused on process management 
 - `list_running_servers` - List all running servers
 - `get_server_logs` - Get server logs for debugging
 - `restart_dev_server` - Restart a development server
+
+### Browser Log Collection
+- `get_browser_logs` - Retrieve browser console logs with filtering
+- `get_browser_log_stats` - Get statistics about collected logs
+- `clear_browser_logs` - Clear stored browser logs
 
 ## Installation
 
@@ -114,6 +119,54 @@ This solves the common issue where `npm run dev` blocks Claude Code execution. T
 }
 // Returns: "Development server likely running at: http://localhost:3000"
 ```
+
+### Browser Log Collection
+
+The browser log collection feature requires installing a Chrome extension to capture console logs from localhost development servers.
+
+#### Setup Chrome Extension
+
+1. Open Chrome and navigate to `chrome://extensions/`
+2. Enable "Developer mode" in the top right
+3. Click "Load unpacked" and select the `extension` directory from this project
+4. The extension will automatically start collecting logs from all localhost tabs
+
+#### Using Browser Log Tools
+
+```javascript
+// Get recent browser logs
+{
+  "tool": "get_browser_logs",
+  "arguments": {
+    "filter": {
+      "port": "3000",
+      "level": ["error", "warn"],
+      "limit": 50
+    }
+  }
+}
+
+// Get browser log statistics
+{
+  "tool": "get_browser_log_stats",
+  "arguments": {}
+}
+// Returns: { totalLogs: 234, portStats: { "3000": 150, "8080": 84 }, activePorts: ["3000", "8080"] }
+
+// Clear logs for specific port
+{
+  "tool": "clear_browser_logs",
+  "arguments": {
+    "port": "3000"
+  }
+}
+```
+
+The MCP server automatically starts an HTTP server on port 3456 to receive logs from the Chrome extension. Logs are stored in memory and can be filtered by:
+- Port number (e.g., "3000", "8080")
+- Log level (log, warn, error, info, debug)
+- Time range
+- Project ID (auto-detected from page)
 
 ## License
 

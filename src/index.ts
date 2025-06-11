@@ -11,6 +11,8 @@ import {
 
 import { ProcessTool } from './tools/process.js';
 import { DevServerTool } from './tools/dev-server.js';
+import { BrowserLogTool } from './tools/browser-logs.js';
+import { startHttpServer } from './server/http-server.js';
 
 const server = new Server(
   {
@@ -27,6 +29,7 @@ const server = new Server(
 const tools = [
   new ProcessTool(),
   new DevServerTool(),
+  new BrowserLogTool(),
 ];
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -62,6 +65,9 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('DevTools MCP Server running on stdio');
+  
+  // Start HTTP server for browser logs
+  startHttpServer();
 }
 
 main().catch((error) => {

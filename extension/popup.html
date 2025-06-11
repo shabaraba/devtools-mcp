@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 10px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    h2 {
+      margin-top: 0;
+      font-size: 16px;
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+    }
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    .online {
+      background-color: #4CAF50;
+    }
+    .offline {
+      background-color: #F44336;
+    }
+    .info {
+      font-size: 12px;
+      color: #666;
+      margin: 10px 0;
+    }
+    .server-url {
+      font-family: monospace;
+      background: #f5f5f5;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <h2>DevTools MCP Logger</h2>
+  <div class="status">
+    <div class="status-indicator" id="status"></div>
+    <span id="status-text">Checking...</span>
+  </div>
+  <div class="info">
+    Server: <span class="server-url">localhost:3456</span>
+  </div>
+  <div class="info">
+    Logs are automatically collected from all localhost tabs and sent to the MCP server.
+  </div>
+  <script src="src/popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "devtools-mcp-browser-logger",
+  "version": "1.0.0",
+  "description": "Chrome extension for DevTools MCP browser log collection",
+  "scripts": {
+    "dev": "echo 'Load unpacked extension from chrome://extensions'",
+    "pack": "zip -r devtools-mcp-logger.zip . -x '*.git*' -x 'node_modules/*' -x 'package*.json' -x '*.zip'"
+  },
+  "author": "",
+  "license": "MIT"
+}
