@@ -40,6 +40,51 @@ npm run dev
 npm run build
 ```
 
+## MCP Server Configuration
+
+### Claude Code (claude.ai/code) Configuration
+
+Add the following configuration to your `~/.claude/mcp_servers.json`:
+
+```json
+{
+  "devtools": {
+    "command": "node",
+    "args": ["/path/to/devtools-mcp/dist/index.js"],
+    "cwd": "/path/to/devtools-mcp"
+  }
+}
+```
+
+### Claude Desktop Configuration
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "devtools": {
+      "command": "node",
+      "args": ["/path/to/devtools-mcp/dist/index.js"],
+      "cwd": "/path/to/devtools-mcp"
+    }
+  }
+}
+```
+
+### General MCP Client Configuration
+
+For other MCP-compatible clients, configure the server with:
+- **Command**: `node`
+- **Args**: `["/path/to/devtools-mcp/dist/index.js"]`
+- **Working Directory**: `/path/to/devtools-mcp`
+- **Transport**: stdio
+
+Make sure to build the project first:
+```bash
+npm run build
+```
+
 ## Usage
 
 The server runs on stdio and can be integrated with MCP-compatible clients.
@@ -124,12 +169,44 @@ This solves the common issue where `npm run dev` blocks Claude Code execution. T
 
 The browser log collection feature requires installing a Chrome extension to capture console logs from localhost development servers.
 
-#### Setup Chrome Extension
+#### Chrome Extension Installation
 
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable "Developer mode" in the top right
-3. Click "Load unpacked" and select the `extension` directory from this project
-4. The extension will automatically start collecting logs from all localhost tabs
+The browser log collection requires a Chrome extension to capture console logs from localhost development servers.
+
+**Prerequisites:**
+- Google Chrome or Chromium-based browser
+- DevTools MCP Server running (the extension sends logs to `http://localhost:3456`)
+
+**Installation Steps:**
+
+1. **Open Chrome Extensions Management**
+   - Navigate to `chrome://extensions/`
+   - Or click Chrome menu → More Tools → Extensions
+
+2. **Enable Developer Mode**
+   - Toggle "Developer mode" switch in the top right corner
+
+3. **Load the Extension**
+   - Click "Load unpacked" button
+   - Navigate to and select the `extension` directory from this project
+   - The extension should appear in your extensions list
+
+4. **Verify Installation**
+   - You should see "DevTools Browser Log Collector" in your extensions
+   - The extension icon may appear in your browser toolbar
+   - Start your MCP server (`npm run dev`) to begin collecting logs
+
+**Automatic Log Collection:**
+- The extension automatically detects localhost URLs (ports 3000-9999)
+- Captures all console.log, console.warn, console.error messages
+- Sends logs to the MCP server running on port 3456
+- No additional configuration required
+
+**Troubleshooting:**
+- If logs aren't appearing, check that your MCP server is running
+- Verify your development server is running on a supported port (3000-9999)
+- Check Chrome extension permissions in `chrome://extensions/`
+- Refresh localhost tabs after installing the extension
 
 #### Using Browser Log Tools
 
