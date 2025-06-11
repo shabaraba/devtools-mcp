@@ -1,6 +1,9 @@
 import { Tool, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { spawn, ChildProcess } from 'child_process';
 import { BaseTool } from '../types/index.js';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 interface DevServer {
   name: string;
@@ -13,12 +16,29 @@ interface DevServer {
   status: 'starting' | 'running' | 'stopped' | 'error';
 }
 
+interface SerializedDevServer {
+  name: string;
+  pid: number;
+  command: string;
+  port: number;
+  cwd: string;
+  startTime: string;
+  logs: string[];
+  status: 'starting' | 'running' | 'stopped' | 'error';
+}
+
 export class DevServerTool implements BaseTool {
   private servers: Map<string, DevServer> = new Map();
   private maxLogLines = 100;
   private maxLogLength = 1000;
+  private stateFile: string;
 
   constructor() {
+    this.stateFile = path.join(os.tmpdir(), 'devtools-mcp-servers.json');
+    
+    // Load existing servers on startup
+    this.loadState();
+    
     // Cleanup on process exit
     process.on('exit', () => this.cleanup());
     process.on('SIGINT', () => this.cleanup());
@@ -296,6 +316,9 @@ export class DevServerTool implements BaseTool {
     }
 
     server.status = 'running';
+    
+    // Save state after starting server
+    this.saveState();
 
     return {
       content: [
@@ -343,6 +366,9 @@ export class DevServerTool implements BaseTool {
 
     server.status = 'stopped';
     this.addLog(name, `[STOP] Server stopped by user (${signal})`);
+    
+    // Save state after stopping server
+    this.saveState();
 
     return {
       content: [
@@ -407,20 +433,47 @@ export class DevServerTool implements BaseTool {
   }
 
   private async listRunningServers(): Promise<CallToolResult> {
-    const serverList = Array.from(this.servers.values()).map(server => ({
-      name: server.name,
-      status: server.status,
-      command: server.command,
-      port: server.port,
-      pid: server.process.pid,
-      uptime: Date.now() - server.startTime.getTime(),
-    }));
+    const serverList = Array.from(this.servers.values()).map(server => {
+      // Check if process is actually alive
+      const isAlive = this.isProcessAlive(server.process);
+      
+      // Update status if process is dead but status shows running
+      if (!isAlive && (server.status === 'running' || server.status === 'starting')) {
+        server.status = 'stopped';
+        this.addLog(server.name, '[STATUS] Process detected as stopped');
+      }
+
+      const uptimeMs = Date.now() - server.startTime.getTime();
+      const uptimeMinutes = Math.floor(uptimeMs / 60000);
+      const uptimeSeconds = Math.floor((uptimeMs % 60000) / 1000);
+
+      return {
+        name: server.name,
+        status: server.status,
+        command: server.command,
+        port: server.port,
+        pid: server.process.pid,
+        uptime: `${uptimeMinutes}m ${uptimeSeconds}s`,
+        isProcessAlive: isAlive,
+        cwd: server.cwd,
+        startTime: server.startTime.toISOString(),
+      };
+    });
+
+    // Filter out completely dead servers if needed
+    const activeServers = serverList.filter(server => 
+      server.status !== 'stopped' || server.isProcessAlive
+    );
 
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(serverList, null, 2),
+          text: JSON.stringify({
+            total: serverList.length,
+            active: activeServers.length,
+            servers: serverList
+          }, null, 2),
         },
       ],
     };
@@ -504,6 +557,19 @@ export class DevServerTool implements BaseTool {
     }
   }
 
+  private isProcessAlive(process: ChildProcess): boolean {
+    if (!process || !process.pid) {
+      return false;
+    }
+
+    try {
+      // Sending signal 0 checks if process exists without killing it
+      return process.kill(0);
+    } catch (error) {
+      return false;
+    }
+  }
+
   private async checkPort(port: number): Promise<void> {
     return new Promise((resolve, reject) => {
       const { exec } = require('child_process');
@@ -517,6 +583,96 @@ export class DevServerTool implements BaseTool {
     });
   }
 
+  private loadState(): void {
+    try {
+      if (fs.existsSync(this.stateFile)) {
+        const data = fs.readFileSync(this.stateFile, 'utf8');
+        const serializedServers: SerializedDevServer[] = JSON.parse(data);
+        
+        for (const serialized of serializedServers) {
+          // Try to reconnect to existing process
+          try {
+            const existingProcess = this.attachToExistingProcess(serialized.pid);
+            if (existingProcess) {
+              const server: DevServer = {
+                name: serialized.name,
+                process: existingProcess,
+                command: serialized.command,
+                port: serialized.port,
+                cwd: serialized.cwd,
+                startTime: new Date(serialized.startTime),
+                logs: serialized.logs || [],
+                status: this.isProcessAlive(existingProcess) ? 'running' : 'stopped'
+              };
+              this.servers.set(serialized.name, server);
+            }
+          } catch (error) {
+            // Process no longer exists, skip
+          }
+        }
+      }
+    } catch (error) {
+      // If state file is corrupted, start fresh
+      console.warn('Failed to load dev server state:', error);
+    }
+  }
+
+  private saveState(): void {
+    try {
+      const serializedServers: SerializedDevServer[] = [];
+      
+      for (const server of this.servers.values()) {
+        if (server.process.pid) {
+          serializedServers.push({
+            name: server.name,
+            pid: server.process.pid,
+            command: server.command,
+            port: server.port,
+            cwd: server.cwd,
+            startTime: server.startTime.toISOString(),
+            logs: server.logs.slice(-10), // Keep only recent logs
+            status: server.status
+          });
+        }
+      }
+      
+      fs.writeFileSync(this.stateFile, JSON.stringify(serializedServers, null, 2));
+    } catch (error) {
+      console.warn('Failed to save dev server state:', error);
+    }
+  }
+
+  private attachToExistingProcess(pid: number): ChildProcess | null {
+    try {
+      // Create a mock ChildProcess object that references existing PID
+      const mockProcess = {
+        pid: pid,
+        kill: (signal?: string | number) => {
+          try {
+            return process.kill(pid, signal as any);
+          } catch {
+            return false;
+          }
+        },
+        killed: false,
+        exitCode: null,
+        stdout: null,
+        stderr: null,
+        stdin: null,
+        stdio: [null, null, null],
+        on: () => {},
+        once: () => {},
+        emit: () => false,
+        removeListener: () => {},
+        removeAllListeners: () => {},
+      } as any;
+      
+      return mockProcess;
+    } catch {
+      return null;
+    }
+  }
+
   private cleanup(): void {
     for (const [name, server] of this.servers) {
       if (server.status === 'running' || server.status === 'starting') {
@@ -524,5 +680,6 @@ export class DevServerTool implements BaseTool {
         server.process.kill('SIGTERM');
       }
     }
+    this.saveState();
   }
 }
