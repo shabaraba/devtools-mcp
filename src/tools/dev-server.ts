@@ -157,6 +157,25 @@ export class DevServerTool implements BaseTool {
           },
         },
       },
+      {
+        name: 'discover_running_servers',
+        description: 'Discover and import existing development servers running on common ports',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            portRange: {
+              type: 'string',
+              description: 'Port range to scan (e.g., "3000-5000")',
+              default: '3000-9999',
+            },
+            importFound: {
+              type: 'boolean',
+              description: 'Import found servers for management',
+              default: false,
+            },
+          },
+        },
+      },
     ];
   }
 
@@ -167,7 +186,8 @@ export class DevServerTool implements BaseTool {
       'check_dev_server',
       'list_running_servers',
       'get_server_logs',
-      'restart_dev_server'
+      'restart_dev_server',
+      'discover_running_servers'
     ].includes(name);
   }
 
@@ -186,6 +206,8 @@ export class DevServerTool implements BaseTool {
           return await this.getServerLogs(args);
         case 'restart_dev_server':
           return await this.restartDevServer(args);
+        case 'discover_running_servers':
+          return await this.discoverRunningServers(args);
         default:
           throw new Error(`Unknown dev server tool: ${name}`);
       }
@@ -541,6 +563,152 @@ export class DevServerTool implements BaseTool {
       command: originalConfig.command,
       port: originalConfig.port,
       cwd: originalConfig.cwd,
+    });
+  }
+
+  private async discoverRunningServers(args: Record<string, unknown>): Promise<CallToolResult> {
+    const portRange = (args.portRange as string) || '3000-9999';
+    const importFound = args.importFound as boolean;
+
+    // Parse port range
+    const [startPort, endPort] = portRange.split('-').map(p => parseInt(p.trim()));
+    if (isNaN(startPort) || isNaN(endPort)) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: 'Invalid port range. Use format "3000-5000"',
+          },
+        ],
+      };
+    }
+
+    const foundServers: Array<{
+      port: number;
+      pid: number;
+      command: string;
+      protocol: string;
+    }> = [];
+
+    // Common development server ports to check first
+    const commonPorts = [3000, 3001, 4000, 5000, 8000, 8080, 8081, 5173, 5174];
+    const portsToCheck = [
+      ...commonPorts.filter(p => p >= startPort && p <= endPort),
+      ...Array.from({ length: Math.min(endPort - startPort + 1, 50) }, (_, i) => startPort + i)
+        .filter(p => !commonPorts.includes(p))
+    ];
+
+
+    for (const port of portsToCheck) {
+      try {
+        const serverInfo = await this.getPortInfo(port);
+        if (serverInfo) {
+          foundServers.push({ port, ...serverInfo });
+        }
+      } catch (error) {
+        // Port not in use, continue
+      }
+    }
+
+    // Import found servers if requested
+    let importedCount = 0;
+    if (importFound && foundServers.length > 0) {
+      for (const server of foundServers) {
+        const serverName = `discovered-${server.port}`;
+        
+        // Skip if already managed
+        if (this.servers.has(serverName)) {
+          continue;
+        }
+
+        // Create mock process for existing server
+        const mockProcess = this.attachToExistingProcess(server.pid);
+        if (mockProcess) {
+          const devServer: DevServer = {
+            name: serverName,
+            process: mockProcess,
+            command: server.command,
+            port: server.port,
+            cwd: process.cwd(), // Unknown, use current
+            startTime: new Date(), // Unknown, use current time
+            logs: [`[DISCOVERED] Server discovered on port ${server.port}`],
+            status: 'running'
+          };
+          
+          this.servers.set(serverName, devServer);
+          importedCount++;
+        }
+      }
+      
+      if (importedCount > 0) {
+        this.saveState();
+      }
+    }
+
+    const result = {
+      discovered: foundServers.length,
+      imported: importedCount,
+      servers: foundServers.map(s => ({
+        port: s.port,
+        pid: s.pid,
+        command: s.command,
+        protocol: s.protocol,
+        imported: importFound
+      }))
+    };
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async getPortInfo(port: number): Promise<{ pid: number; command: string; protocol: string } | null> {
+    return new Promise((resolve) => {
+      const { exec } = require('child_process');
+      
+      exec(`lsof -i :${port}`, (error: Error | null, stdout: string) => {
+        if (error || !stdout.trim()) {
+          resolve(null);
+          return;
+        }
+
+        // Parse lsof output to get PID
+        const lines = stdout.trim().split('\n').slice(1); // Skip header
+        if (lines.length === 0) {
+          resolve(null);
+          return;
+        }
+
+        // Get first process line and extract PID
+        const firstLine = lines[0];
+        const parts = firstLine.split(/\s+/);
+        if (parts.length < 2) {
+          resolve(null);
+          return;
+        }
+
+        const pid = parseInt(parts[1]);
+        if (isNaN(pid)) {
+          resolve(null);
+          return;
+        }
+        
+        // Get process command
+        exec(`ps -p ${pid} -o command=`, (error2: Error | null, stdout2: string) => {
+          if (error2) {
+            resolve({ pid, command: 'unknown', protocol: 'tcp' });
+            return;
+          }
+
+          const command = stdout2.trim();
+          resolve({ pid, command, protocol: 'tcp' });
+        });
+      });
     });
   }
 
